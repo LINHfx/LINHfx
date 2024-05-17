@@ -5,7 +5,13 @@
 #property strict
 //+------------------------------------------------------------------+
 //|                                                                  |
-//+------------------------------------------------------------------+ 
+//+------------------------------------------------------------------+
+/* 
+ 
+*/
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 enum ENUM_CHARTSYMBOL
   {
    CurrentChartSymbol=0,//Current Chart Only
@@ -111,14 +117,15 @@ int OnInit()
    ObjectSet ("TP_Edit", OBJPROP_COLOR, clrDarkGreen);
    ObjectSetText ("TP_Edit", DoubleToStr (Bid, Digits), 13, Font_Type, Font_Color);
       
-     ArraySetAsSeries(bar,true);  
+     ArraySetAsSeries(bar,true);
+    
+     
   {
    if(Digits==3 || Digits==5) DigitFactor=10;
    else DigitFactor=1;       
    return(INIT_SUCCEEDED);
   }
 }
-
 void OnDeinit(const int reason)
   {
    DeleteButtons();
@@ -137,8 +144,8 @@ void CreateButtons()
      if (!ButtonCreate (0, "ChangeSL_btn", 0, 002 + 400 + Move_X, 020 + 005 + Move_Y, Button_Width + 020, Button_Height, Corner, "Change SL >>",Font_Type, Font_Size, Font_Color, clrDeepPink, clrYellow)) return;
      if (!ButtonCreate (0, "ChangeTP_btn", 0, 002 + 590 + Move_X, 020 + 005 + Move_Y, Button_Width + 020, Button_Height, Corner, "Change TP >>",Font_Type, Font_Size, Font_Color, clrDarkGreen, clrYellow)) return;
      ChartRedraw();
-    }   
-
+    }
+    
 void OnChartEvent (const int id, const long &lparam, const double &dparam, const string &action)
     {
      ResetLastError();
@@ -690,6 +697,10 @@ bool SetSLnTP()
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 void OnTick()
   {
    CopyRates(_Symbol,PERIOD_CURRENT,0,5,bar);
@@ -712,7 +723,11 @@ void OnTick()
             if(CalculateCurrentOrders()!=0)
                SetSLnTP();
 
-   OrderTest();   
+   OrderTest();
+   
+   
+   
+   
   }
 //+------------------------------------------------------------------+
 //|                                                                  |

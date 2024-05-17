@@ -1,0 +1,736 @@
+
+#property copyright "LinhFX"
+#property link      "t.me/TraderxHunter"
+#property version   "1.2"
+#property strict
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+ 
+enum ENUM_CHARTSYMBOL
+  {
+   CurrentChartSymbol=0,//Current Chart Only
+   AllOpenOrder=1,//All Opened Orders
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+enum ENUM_SLTP_MODE
+  {
+   Server=0,//Place SL n TP
+   Client=1,//Hidden SL n TP
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+enum ENUM_LOCKPROFIT_ENABLE
+  {
+   LP_DISABLE=0,//Disable
+   LP_ENABLE=1,//Enable
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+enum ENUM_TRAILINGSTOP_METHOD
+  {
+   TS_NONE=0,//No Trailing Stop
+   TS_CLASSIC=1,//Classic
+   TS_STEP_DISTANCE=2,//Step Keep Distance
+   TS_STEP_BY_STEP=3, //Step By Step
+  };
+sinput string note7="";//EA tu dong vao lenh theo TIMEFAME dang mo
+string STR_OPTYPE[]={"Buy","Sell","Buy Limit","Sell Limit","Buy Stop","Sell Stop"};
+sinput string note5="";//-=[ BUY setting SL_TP theo gia thi truong ]=-
+input int         SLBuy               = 0;
+input int         TPBuy               = 0;
+input double      LotBuy              = 0   ;
+sinput string note6="";//-=[ SELL setting SL_TP theo gia thi truong ]=-
+input int         SLSell              = 0; 
+input int         TPSell              = 0;
+input double      LotSell             = 0;
+input int         Slippage            = 250;
+int               MagicNumber         = 1368;
+int               DigitFactor;
+bool newBar;
+datetime lastBartime;
+MqlRates bar[];
+
+sinput string note1="";//-=[ SL & TP SETTINGS theo pip 1000=1$ XAUUSD ]=-
+input int   TakeProfit=1000;//Take Profit
+input int   StopLoss=10000;//Stop Loss
+input ENUM_SLTP_MODE SLnTPMode=Client;//SL & TP Mode
+sinput string note2="";//-=[ PROFIT LOCK SETTINGS ]=-
+input ENUM_LOCKPROFIT_ENABLE LockProfitEnable=LP_ENABLE;//Enable/Disable Profit Lock
+input int   LockProfitAfter=750;//Target Points to Lock Profit
+input int   ProfitLock=500;//Profit To Lock
+sinput string note3="";//-=[ TRAILING STOP SETTINGS ]=-
+input ENUM_TRAILINGSTOP_METHOD TrailingStopMethod=TS_NONE;//Trailing Method
+input int   TrailingStop=5000;//Trailing Stop
+input int   TrailingStep=100;//Trailing Stop Step
+sinput string note4="";//-=[ OTHER SETTINGS ]=-
+input ENUM_CHARTSYMBOL  ChartSymbolSelection=CurrentChartSymbol;//
+input bool   inpEnableAlert=false;//Enable Alert
+int extern SubWindow = 0;
+extern int Corner = 2;
+extern int Move_X = 0;
+extern int Move_Y = 0;
+extern string B00001 = "============================";
+extern int Button_Width = 70;
+extern string Font_Type = "Arial Bold";
+extern color Font_Color = clrWhite;
+extern int Font_Size = 9;
+double Pekali;
+
+int OnInit()
+  {
+   CreateButtons();
+   ToolTips_Text ("CloseALL_btn");
+   ToolTips_Text ("Delete___btn");
+   ToolTips_Text ("ChangeBE_btn");
+   ToolTips_Text ("SLplusOnebtn");
+   ToolTips_Text ("DeleteSL_btn");
+   ToolTips_Text ("ChangeSL_btn");
+   ToolTips_Text ("ChangeTP_btn");
+   
+   ObjectCreate ("SL_Edit", OBJ_EDIT, SubWindow, 0, 0);
+   ObjectSet ("SL_Edit", OBJPROP_CORNER, Corner);
+   ObjectSet ("SL_Edit", OBJPROP_XSIZE, Button_Width + 020);
+   ObjectSet ("SL_Edit", OBJPROP_YSIZE, Font_Size*2.8);
+   ObjectSet ("SL_Edit", OBJPROP_XDISTANCE, 492 + Move_X);
+   ObjectSet ("SL_Edit", OBJPROP_YDISTANCE, 025 + Move_Y);
+   ObjectSet ("SL_Edit", OBJPROP_ALIGN, ALIGN_CENTER);
+   ObjectSet ("SL_Edit", OBJPROP_COLOR, clrDeepPink);
+   ObjectSetText ("SL_Edit", DoubleToStr (Bid, Digits), 13, Font_Type, Font_Color);
+   
+   ObjectCreate ("TP_Edit", OBJ_EDIT, SubWindow, 0, 0);
+   ObjectSet ("TP_Edit", OBJPROP_CORNER, Corner);
+   ObjectSet ("TP_Edit", OBJPROP_XSIZE, Button_Width + 020);
+   ObjectSet ("TP_Edit", OBJPROP_YSIZE, Font_Size*2.8);
+   ObjectSet ("TP_Edit", OBJPROP_XDISTANCE, 682 + Move_X);
+   ObjectSet ("TP_Edit", OBJPROP_YDISTANCE, 025 + Move_Y);
+   ObjectSet ("TP_Edit", OBJPROP_ALIGN, ALIGN_CENTER);
+   ObjectSet ("TP_Edit", OBJPROP_COLOR, clrDarkGreen);
+   ObjectSetText ("TP_Edit", DoubleToStr (Bid, Digits), 13, Font_Type, Font_Color);
+      
+     ArraySetAsSeries(bar,true);  
+  {
+   if(Digits==3 || Digits==5) DigitFactor=10;
+   else DigitFactor=1;       
+   return(INIT_SUCCEEDED);
+  }
+}
+
+void OnDeinit(const int reason)
+  {
+   DeleteButtons();
+   ObjectDelete ("SL_Edit");
+   ObjectDelete ("TP_Edit");
+  }
+
+void CreateButtons()
+    {
+     int Button_Height = (int)(Font_Size*2.8);
+     if (!ButtonCreate (0, "CloseALL_btn", 0, 002 + 000 + Move_X, 020 + 005 + Move_Y, Button_Width + 000, Button_Height, Corner, "Close All", Font_Type, Font_Size, Font_Color, clrTeal, clrYellow)) return;
+     if (!ButtonCreate (0, "Delete___btn", 0, 002 + 075 + Move_X, 020 + 005 + Move_Y, Button_Width + 000, Button_Height, Corner, "Delete All",Font_Type, Font_Size, Font_Color, clrTeal, clrYellow)) return;
+     if (!ButtonCreate (0, "ChangeBE_btn", 0, 002 + 165 + Move_X, 020 + 005 + Move_Y, Button_Width + 000, Button_Height, Corner, "SL = BE",Font_Type, Font_Size, Font_Color, clrCrimson, clrYellow)) return;
+     if (!ButtonCreate (0, "SLplusOnebtn", 0, 002 + 240 + Move_X, 020 + 005 + Move_Y, Button_Width + 000, Button_Height, Corner, "SL + 1",Font_Type, Font_Size, Font_Color, clrCrimson, clrYellow)) return;
+     if (!ButtonCreate (0, "DeleteSL_btn", 0, 002 + 315 + Move_X, 020 + 005 + Move_Y, Button_Width + 000, Button_Height, Corner, "Delete SL",Font_Type, Font_Size, Font_Color, clrBlue, clrYellow)) return;
+     if (!ButtonCreate (0, "ChangeSL_btn", 0, 002 + 400 + Move_X, 020 + 005 + Move_Y, Button_Width + 020, Button_Height, Corner, "Change SL >>",Font_Type, Font_Size, Font_Color, clrDeepPink, clrYellow)) return;
+     if (!ButtonCreate (0, "ChangeTP_btn", 0, 002 + 590 + Move_X, 020 + 005 + Move_Y, Button_Width + 020, Button_Height, Corner, "Change TP >>",Font_Type, Font_Size, Font_Color, clrDarkGreen, clrYellow)) return;
+     ChartRedraw();
+    }   
+
+void OnChartEvent (const int id, const long &lparam, const double &dparam, const string &action)
+    {
+     ResetLastError();
+     if (id == CHARTEVENT_OBJECT_CLICK) {if (ObjectType (action) == OBJ_BUTTON) {ButtonPressed (0, action);}}
+    }
+
+void ButtonPressed (const long chartID, const string action)
+    {
+     ObjectSetInteger (chartID, action, OBJPROP_BORDER_COLOR, clrBlack); // button pressed
+     if (action == "CloseALL_btn") CloseAll_Button (action);
+     if (action == "Delete___btn") Delete___Button (action);
+     if (action == "ChangeBE_btn") ChangeBE_Button (action);
+     if (action == "SLplusOnebtn") SLplus1__Button (action);
+     if (action == "DeleteSL_btn") DeleteSL_Button (action);
+     if (action == "ChangeSL_btn") ChangeSL_Button (action);
+     if (action == "ChangeTP_btn") ChangeTP_Button (action);
+     Sleep (1000);
+     ObjectSetInteger (chartID, action, OBJPROP_BORDER_COLOR, clrYellow); // button unpressed
+     ObjectSetInteger (chartID, action, OBJPROP_STATE, false); // button unpressed
+     ChartRedraw();
+    }
+    
+void DeleteButtons()
+    {
+     ButtonDelete (0, "CloseALL_btn");
+     ButtonDelete (0, "Delete___btn");
+     ButtonDelete (0, "ChangeBE_btn");
+     ButtonDelete (0, "SLplusOnebtn");
+     ButtonDelete (0, "DeleteSL_btn");
+     ButtonDelete (0, "ChangeSL_btn");
+     ButtonDelete (0, "ChangeTP_btn");
+    }
+
+void ToolTips_Text (const string action)
+  {
+   if (action == "CloseALL_btn") {ObjectSetString (0, action, OBJPROP_TOOLTIP, "Close Open Order(s) for **Current Chart** ONLY");}
+   if (action == "Delete___btn") {ObjectSetString (0, action, OBJPROP_TOOLTIP, "Delete Pending Order(s) for **Current Chart** ONLY");}
+   if (action == "ChangeBE_btn") {ObjectSetString (0, action, OBJPROP_TOOLTIP, "Set SL to BE for ALL Open Order(s) on **Current Chart** ONLY");}
+   if (action == "SLplusOnebtn") {ObjectSetString (0, action, OBJPROP_TOOLTIP, "Add 1 pip to current SL price for ALL Open Order(s) on **Current Chart** ONLY");}
+   if (action == "DeleteSL_btn") {ObjectSetString (0, action, OBJPROP_TOOLTIP, "Remove current SL value for ALL Open Order(s) on **Current Chart** ONLY");}
+   if (action == "ChangeSL_btn") {ObjectSetString (0, action, OBJPROP_TOOLTIP, "Change SL value for ALL Open Order(s) on **Current Chart** ONLY");}
+   if (action == "ChangeTP_btn") {ObjectSetString (0, action, OBJPROP_TOOLTIP, "Change TP value for ALL Open Order(s) on **Current Chart** ONLY");}
+  }
+
+int CloseAll_Button (const string action)
+  {
+   int ticket;
+   if (OrdersTotal() == 0) return(0);
+   for (int i = OrdersTotal() - 1; i >= 0; i--)
+      {
+       if (OrderSelect (i, SELECT_BY_POS, MODE_TRADES) == true)
+         {
+          if (OrderType() == OP_BUY && OrderSymbol() == Symbol())
+            {
+             ticket = OrderClose (OrderTicket(), OrderLots(), MarketInfo (OrderSymbol(), MODE_BID), 3, clrNONE);
+             if (ticket == -1) Print ("Error : ", GetLastError());
+             if (ticket >   0) Print ("Position ", OrderTicket() ," closed");
+            }
+          if (OrderType() == OP_SELL && OrderSymbol() == Symbol())
+            {
+             ticket = OrderClose (OrderTicket(), OrderLots(), MarketInfo (OrderSymbol(), MODE_ASK), 3, clrNONE);
+             if (ticket == -1) Print ("Error : ",  GetLastError());
+             if (ticket >   0) Print ("Position ", OrderTicket() ," closed");
+            }
+         }
+      }
+   return(0);
+  }
+
+int Delete___Button (const string action)
+  {   
+   int ticket;
+   if (OrdersTotal() == 0) return(0);
+   for (int i = OrdersTotal() - 1; i >= 0; i--)
+      {
+       if (OrderSelect (i, SELECT_BY_POS, MODE_TRADES) == true)
+         {
+          if (OrderType() == OP_BUYLIMIT && OrderSymbol() == Symbol())
+            {
+             ticket = OrderDelete (OrderTicket(), clrNONE);
+             if (ticket == -1) Print ("Error : ",  GetLastError());
+             if (ticket >   0) Print ("Position ", OrderTicket() ," closed");
+            }
+          if (OrderType() == OP_SELLLIMIT && OrderSymbol() == Symbol())
+            {
+             ticket = OrderDelete (OrderTicket(), clrNONE);
+             if (ticket == -1) Print ("Error : ",  GetLastError());
+             if (ticket >   0) Print ("Position ", OrderTicket() ," closed");
+            }
+          if (OrderType() == OP_BUYSTOP && OrderSymbol() == Symbol())
+            {
+             ticket = OrderDelete (OrderTicket(), clrNONE);
+             if (ticket == -1) Print ("Error : ",  GetLastError());
+             if (ticket >   0) Print ("Position ", OrderTicket() ," closed");
+            }
+          if (OrderType() == OP_SELLSTOP && OrderSymbol() == Symbol())
+            {
+             ticket = OrderDelete (OrderTicket(), clrNONE);
+             if (ticket == -1) Print ("Error : ",  GetLastError());
+             if (ticket >   0) Print ("Position ", OrderTicket() ," closed");
+            }
+         }
+      }
+   return(0);
+  }
+
+int ChangeBE_Button (const string action)
+  {
+   double Gigits = MarketInfo (Symbol(), MODE_DIGITS);
+   if (Gigits == 2) Pekali = 100;
+   if (Gigits == 3) Pekali = 100;
+   if (Gigits == 4) Pekali = 10000;
+   if (Gigits == 5) Pekali = 10000;
+   
+   double Sel_BE_Price = 0;
+   double Buy_BE_Price = 0;
+   double Total_Sell_Size = 0;
+   double Total_Buy_Size = 0;
+   
+   for (int k = 0; k < OrdersTotal(); k++)
+      {
+       OrderSelect (k, SELECT_BY_POS, MODE_TRADES);
+       if (OrderSymbol() == Symbol())
+         {
+          if (OrderType() == OP_BUY)
+            {
+             Buy_BE_Price += OrderOpenPrice()*OrderLots();
+             Total_Buy_Size += OrderLots();
+            }
+          if (OrderType() == OP_SELL)
+            {
+             Sel_BE_Price += OrderOpenPrice()*OrderLots();
+             Total_Sell_Size += OrderLots();
+            }
+      }
+   }
+      
+   if (Buy_BE_Price > 0) {Buy_BE_Price /= Total_Buy_Size;}
+   if (Sel_BE_Price > 0) {Sel_BE_Price /= Total_Sell_Size;}
+
+   int ticket;
+   if (OrdersTotal() == 0) return(0);
+   for (int m = OrdersTotal() - 1; m >= 0; m--)
+      {
+       if (OrderSelect (m, SELECT_BY_POS, MODE_TRADES) == true)
+         {
+          if (OrderType() == OP_BUY && OrderSymbol() == Symbol())
+            {
+             ticket = OrderModify (OrderTicket(), 0, Buy_BE_Price + 0/Pekali, OrderTakeProfit(), 0, clrNONE);
+             if (ticket == -1) Print ("Error : ", GetLastError());
+             if (ticket >   0) Print ("SL Position for ", OrderTicket() ," modified.");
+            }
+          if (OrderType() == OP_SELL && OrderSymbol() == Symbol())
+            {
+             ticket = OrderModify (OrderTicket(), 0, Sel_BE_Price - 0/Pekali, OrderTakeProfit(), 0, clrNONE);
+             if (ticket == -1) Print ("Error : ",  GetLastError());
+             if (ticket >   0) Print ("Position ", OrderTicket() ," closed");
+            }
+         }
+      }
+   return(0);
+  }
+  
+int SLplus1__Button (const string action)
+  {
+   double Gigits = MarketInfo (Symbol(), MODE_DIGITS);
+   if (Gigits == 2) Pekali = 100;
+   if (Gigits == 3) Pekali = 100;
+   if (Gigits == 4) Pekali = 10000;
+   if (Gigits == 5) Pekali = 10000;
+
+   int ticket;
+   if (OrdersTotal() == 0) return(0);
+   for (int m = OrdersTotal() - 1; m >= 0; m--)
+      {
+       if (OrderSelect (m, SELECT_BY_POS, MODE_TRADES) == true)
+         {
+          if (OrderType() == OP_BUY && OrderSymbol() == Symbol() && OrderStopLoss() != 0)
+            {
+             ticket = OrderModify (OrderTicket(), 0, OrderStopLoss() + 10/Pekali, OrderTakeProfit(), 0, clrNONE);
+             if (ticket == -1) Print ("Error : ", GetLastError());
+             if (ticket >   0) Print ("SL Position for ", OrderTicket() ," modified.");
+            }
+          if (OrderType() == OP_SELL && OrderSymbol() == Symbol() && OrderStopLoss() != 0)
+            {
+             ticket = OrderModify (OrderTicket(), 0, OrderStopLoss() - 10/Pekali, OrderTakeProfit(), 0, clrNONE);
+             if (ticket == -1) Print ("Error : ",  GetLastError());
+             if (ticket >   0) Print ("Position ", OrderTicket() ," closed");
+            }            
+         }
+      }
+   return(0);
+  }
+
+int DeleteSL_Button (const string action)
+  {
+   int ticket;
+   if (OrdersTotal() == 0) return(0);
+   for (int n = OrdersTotal() - 1; n >= 0; n--)
+      {
+       if (OrderSelect (n, SELECT_BY_POS, MODE_TRADES) == true)
+         {
+          if (OrderType() == OP_BUY && OrderSymbol() == Symbol() && OrderStopLoss() != 0)
+            {
+             ticket = OrderModify (OrderTicket(), 0, 0, OrderTakeProfit(), 0, clrNONE);
+             if (ticket == -1) Print ("Error : ", GetLastError());
+             if (ticket >   0) Print ("SL Position for ", OrderTicket() ," modified.");
+            }
+          if (OrderType() == OP_SELL && OrderSymbol() == Symbol() && OrderStopLoss() != 0)
+            {
+             ticket = OrderModify (OrderTicket(), 0, 0, OrderTakeProfit(), 0, clrNONE);
+             if (ticket == -1) Print ("Error : ",  GetLastError());
+             if (ticket >   0) Print ("Position ", OrderTicket() ," closed");
+            }            
+         }
+      }
+   return(0);
+  }
+
+int ChangeSL_Button (const string action)
+  {
+   double SL_Extract = StrToDouble (ObjectGetString (0, "SL_Edit", OBJPROP_TEXT, 0));
+   int ticket;
+   if (OrdersTotal() == 0) return(0);
+   for (int n = OrdersTotal() - 1; n >= 0; n--)
+      {
+       if (OrderSelect (n, SELECT_BY_POS, MODE_TRADES) == true)
+         {
+          if (OrderType() == OP_BUY && OrderSymbol() == Symbol())
+            {
+             ticket = OrderModify (OrderTicket(), 0, SL_Extract, OrderTakeProfit(), 0, clrNONE);
+             if (ticket == -1) Print ("Error : ", GetLastError());
+             if (ticket >   0) Print ("SL Position for ", OrderTicket() ," modified.");
+            }
+          if (OrderType() == OP_SELL && OrderSymbol() == Symbol())
+            {
+             ticket = OrderModify (OrderTicket(), 0, SL_Extract, OrderTakeProfit(), 0, clrNONE);
+             if (ticket == -1) Print ("Error : ",  GetLastError());
+             if (ticket >   0) Print ("Position ", OrderTicket() ," closed");
+            }            
+         }
+      }
+   return(0);
+  }
+
+int ChangeTP_Button (const string action)
+  {
+   double TP_Extract = StrToDouble (ObjectGetString (0, "TP_Edit", OBJPROP_TEXT, 0));
+   int ticket;
+   if (OrdersTotal() == 0) return(0);
+   for (int n = OrdersTotal() - 1; n >= 0; n--)
+      {
+       if (OrderSelect (n, SELECT_BY_POS, MODE_TRADES) == true)
+         {
+          if (OrderType() == OP_BUY && OrderSymbol() == Symbol())
+            {
+             ticket = OrderModify (OrderTicket(), 0, OrderStopLoss(), TP_Extract, 0, clrNONE);
+             if (ticket == -1) Print ("Error : ", GetLastError());
+             if (ticket >   0) Print ("SL Position for ", OrderTicket() ," modified.");
+            }
+          if (OrderType() == OP_SELL && OrderSymbol() == Symbol())
+            {
+             ticket = OrderModify (OrderTicket(), 0, OrderStopLoss(), TP_Extract, 0, clrNONE);
+             if (ticket == -1) Print ("Error : ",  GetLastError());
+             if (ticket >   0) Print ("Position ", OrderTicket() ," closed");
+            }            
+         }
+      }
+   return(0);
+  }
+  
+bool ButtonCreate (const long chart_ID = 0, const string name = "Button", const int sub_window = 0, const int x = 0, const int y = 0, const int width = 500,
+                   const int height = 18, int corner = 0, const string text = "button", const string font = "Arial Bold",
+                   const int font_size = 10, const color clr = clrBlack, const color back_clr = C'170,170,170', const color border_clr = clrNONE,
+                   const bool state = false, const bool back = false, const bool selection = false, const bool hidden = true, const long z_order = 0)
+  {
+   ResetLastError();
+   if (!ObjectCreate (chart_ID, name, OBJ_BUTTON, SubWindow, 0, 0))
+     {
+      Print (__FUNCTION__, " : failed to create the button! Error code : ", GetLastError());
+      return(false);
+     }
+   ObjectSetInteger (chart_ID, name, OBJPROP_XDISTANCE, x);
+   ObjectSetInteger (chart_ID, name, OBJPROP_YDISTANCE, y);
+   ObjectSetInteger (chart_ID, name, OBJPROP_XSIZE, width);
+   ObjectSetInteger (chart_ID, name, OBJPROP_YSIZE, height);
+   ObjectSetInteger (chart_ID, name, OBJPROP_CORNER, corner);
+   ObjectSetInteger (chart_ID, name, OBJPROP_FONTSIZE, font_size);
+   ObjectSetInteger (chart_ID, name, OBJPROP_COLOR, clr);
+   ObjectSetInteger (chart_ID, name, OBJPROP_BGCOLOR, back_clr);
+   ObjectSetInteger (chart_ID, name, OBJPROP_BORDER_COLOR, border_clr);
+   ObjectSetInteger (chart_ID, name, OBJPROP_BACK, back);
+   ObjectSetInteger (chart_ID, name, OBJPROP_STATE, state);
+   ObjectSetInteger (chart_ID, name, OBJPROP_SELECTABLE, selection);
+   ObjectSetInteger (chart_ID, name, OBJPROP_SELECTED, selection);
+   ObjectSetInteger (chart_ID, name, OBJPROP_HIDDEN, hidden);
+   ObjectSetInteger (chart_ID, name, OBJPROP_ZORDER,z_order);
+   ObjectSetString  (chart_ID, name, OBJPROP_TEXT, text);
+   ObjectSetString  (chart_ID, name, OBJPROP_FONT, font);
+   return(true);
+  }
+  
+bool ButtonDelete (const long chart_ID=0, const string name="Button")
+  {
+   ResetLastError();
+   if (!ObjectDelete (chart_ID,name))
+     {
+      Print (__FUNCTION__, ": Failed to delete the button! Error code = ", GetLastError());
+      return(false);
+     }
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+
+int CalculateCurrentOrders()
+  {
+   int buys=0,sells=0;
+//---
+   for(int i=0;i<OrdersTotal();i++)
+     {
+      if(OrderSelect(i,SELECT_BY_POS,MODE_TRADES)==false) break;
+      if(ChartSymbolSelection==CurrentChartSymbol && OrderSymbol()!=Symbol()) continue;
+      if(OrderType()==OP_BUY)
+         buys++;
+      if(OrderType()==OP_SELL)
+         sells++;
+     }
+
+   if(buys>0) return(buys);
+   else       return(-sells);
+//---
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool LockProfit(int TiketOrder,int TargetPoints,int LockedPoints)
+  {
+   if(LockProfitEnable==False || TargetPoints==0 || LockedPoints==0) return false;
+
+   if(OrderSelect(TiketOrder,SELECT_BY_TICKET,MODE_TRADES)==false) return false;
+
+   double CurrentSL=(OrderStopLoss()!=0)?OrderStopLoss():OrderOpenPrice();
+   double point=MarketInfo(OrderSymbol(),MODE_POINT);
+   int digits=(int)MarketInfo(OrderSymbol(),MODE_DIGITS);
+   double minstoplevel=MarketInfo(OrderSymbol(),MODE_STOPLEVEL);
+   double ask=MarketInfo(OrderSymbol(),MODE_ASK);
+   double bid=MarketInfo(OrderSymbol(),MODE_BID);
+   double PSL=0;
+
+   if((OrderType()==OP_BUY) && (bid-OrderOpenPrice()>=TargetPoints*point) && (CurrentSL<=OrderOpenPrice()))
+     {
+      PSL=NormalizeDouble(OrderOpenPrice()+(LockedPoints*point),digits);
+     }
+   else if((OrderType()==OP_SELL) && (OrderOpenPrice()-ask>=TargetPoints*point) && (CurrentSL>=OrderOpenPrice()))
+     {
+      PSL=NormalizeDouble(OrderOpenPrice()-(LockedPoints*point),digits);
+     }
+   else
+      return false;
+
+   Print(STR_OPTYPE[OrderType()]," #",OrderTicket()," ProfitLock: OP=",OrderOpenPrice()," CSL=",CurrentSL," PSL=",PSL," LP=",LockedPoints);
+
+   if(OrderModify(OrderTicket(),OrderOpenPrice(),PSL,OrderTakeProfit(),0,clrRed))
+      return true;
+   else
+      return false;
+
+
+   return false;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool RZ_TrailingStop(int TiketOrder,int JumlahPoin,int Step=1,ENUM_TRAILINGSTOP_METHOD Method=TS_STEP_DISTANCE)
+  {
+   if(JumlahPoin==0) return false;
+
+   if(OrderSelect(TiketOrder,SELECT_BY_TICKET,MODE_TRADES)==false) return false;
+
+   double CurrentSL=(OrderStopLoss()!=0)?OrderStopLoss():OrderOpenPrice();
+   double point=MarketInfo(OrderSymbol(),MODE_POINT);
+   int digits=(int)MarketInfo(OrderSymbol(),MODE_DIGITS);
+   double minstoplevel=MarketInfo(OrderSymbol(),MODE_STOPLEVEL);
+   double ask=MarketInfo(OrderSymbol(),MODE_ASK);
+   double bid=MarketInfo(OrderSymbol(),MODE_BID);
+   double TSL=0;
+
+   JumlahPoin=JumlahPoin+(int)minstoplevel;
+
+   if((OrderType()==OP_BUY) && (bid-OrderOpenPrice()>JumlahPoin*point))
+     {
+      if(CurrentSL<OrderOpenPrice())
+         CurrentSL=OrderOpenPrice();
+
+      if((bid-CurrentSL)>=JumlahPoin*point)
+        {
+         switch(Method)
+           {
+            case TS_CLASSIC://Classic, no step
+               TSL=NormalizeDouble(bid-(JumlahPoin*point),digits);
+               break;
+            case TS_STEP_DISTANCE://Step keeping distance
+               TSL=NormalizeDouble(bid-((JumlahPoin-Step)*point),digits);
+               break;
+            case TS_STEP_BY_STEP://Step by step (slow)
+               TSL=NormalizeDouble(CurrentSL+(Step*point),digits);
+               break;
+            default:
+               TSL=0;
+           }
+        }
+     }
+
+   else if((OrderType()==OP_SELL) && (OrderOpenPrice()-ask>JumlahPoin*point))
+     {
+      if(CurrentSL>OrderOpenPrice())
+         CurrentSL=OrderOpenPrice();
+
+      if((CurrentSL-ask)>=JumlahPoin*point)
+        {
+         switch(Method)
+           {
+            case TS_CLASSIC://Classic
+               TSL=NormalizeDouble(ask+(JumlahPoin*point),digits);
+               break;
+            case TS_STEP_DISTANCE://Step keeping distance
+               TSL=NormalizeDouble(ask+((JumlahPoin-Step)*point),digits);
+               break;
+            case TS_STEP_BY_STEP://Step by step (slow)
+               TSL=NormalizeDouble(CurrentSL-(Step*point),digits);
+               break;
+            default:
+               TSL=0;
+           }
+        }
+     }
+
+   if(TSL==0)
+      return false;
+
+   Print(STR_OPTYPE[OrderType()]," #",OrderTicket()," TrailingStop: OP=",OrderOpenPrice()," CSL=",CurrentSL," TSL=",TSL," TS=",JumlahPoin," Step=",Step);
+   bool res=OrderModify(OrderTicket(),OrderOpenPrice(),TSL,OrderTakeProfit(),0,clrRed);
+   if(res == true) return true;
+   else return false;
+
+   return false;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool SetSLnTP()
+  {
+   double SL,TP;
+   SL=TP=0.00;
+
+   for(int i=0;i<OrdersTotal();i++)
+     {
+      if(OrderSelect(i,SELECT_BY_POS,MODE_TRADES)==false) break;
+      if(ChartSymbolSelection==CurrentChartSymbol && OrderSymbol()!=Symbol()) continue;
+
+      double point=MarketInfo(OrderSymbol(),MODE_POINT);
+      double minstoplevel=MarketInfo(OrderSymbol(),MODE_STOPLEVEL);
+      double ask=MarketInfo(OrderSymbol(),MODE_ASK);
+      double bid=MarketInfo(OrderSymbol(),MODE_BID);
+      int digits=(int)MarketInfo(OrderSymbol(),MODE_DIGITS);
+
+      //Print("Check SL & TP : ",OrderSymbol()," SL = ",OrderStopLoss()," TP = ",OrderTakeProfit());
+
+      double ClosePrice=0;
+      int Points=0;
+      color CloseColor=clrNONE;
+
+      //Get Points
+      if(OrderType()==OP_BUY)
+        {
+         CloseColor=clrBlue;
+         ClosePrice=bid;
+         Points=(int)((ClosePrice-OrderOpenPrice())/point);
+        }
+      else if(OrderType()==OP_SELL)
+        {
+         CloseColor=clrRed;
+         ClosePrice=ask;
+         Points=(int)((OrderOpenPrice()-ClosePrice)/point);
+        }
+
+      //Set Server SL and TP
+      if(SLnTPMode==Server)
+        {
+         if(OrderType()==OP_BUY)
+           {
+            SL=(StopLoss>0)?NormalizeDouble(OrderOpenPrice()-((StopLoss+minstoplevel)*point),digits):0;
+            TP=(TakeProfit>0)?NormalizeDouble(OrderOpenPrice()+((TakeProfit+minstoplevel)*point),digits):0;
+           }
+         else if(OrderType()==OP_SELL)
+           {
+            SL=(StopLoss>0)?NormalizeDouble(OrderOpenPrice()+((StopLoss+minstoplevel)*point),digits):0;
+            TP=(TakeProfit>0)?NormalizeDouble(OrderOpenPrice()-((TakeProfit+minstoplevel)*point),digits):0;
+           }
+
+         if(OrderStopLoss()==0.0 && OrderTakeProfit()==0.0)
+            bool res=OrderModify(OrderTicket(),OrderOpenPrice(),SL,TP,0,Blue);
+         else if(OrderTakeProfit()==0.0)
+            bool res=OrderModify(OrderTicket(),OrderOpenPrice(),OrderStopLoss(),TP,0,Blue);
+         else if(OrderStopLoss()==0.0)
+            bool res=OrderModify(OrderTicket(),OrderOpenPrice(),SL,OrderTakeProfit(),0,Red);
+        }
+      //Hidden SL and TP
+      else if(SLnTPMode==Client)
+        {
+         if((TakeProfit>0 && Points>=TakeProfit) || (StopLoss>0 && Points<=-StopLoss))
+           {
+            if(OrderClose(OrderTicket(),OrderLots(),ClosePrice,3,CloseColor))
+              {
+               if(inpEnableAlert)
+                 {
+                  if(OrderProfit()>0)
+                     Alert("Closed by Virtual TP #",OrderTicket()," Profit=",OrderProfit()," Points=",Points);
+                  if(OrderProfit()<0)
+                     Alert("Closed by Virtual SL #",OrderTicket()," Loss=",OrderProfit()," Points=",Points);
+                 }
+              }
+           }
+        }
+
+      if(LockProfitAfter>0 && ProfitLock>0 && Points>=LockProfitAfter)
+        {
+         if(Points<=LockProfitAfter+TrailingStop)
+           {
+            LockProfit(OrderTicket(),LockProfitAfter,ProfitLock);
+           }
+         else if(Points>=LockProfitAfter+TrailingStop)
+           {
+            RZ_TrailingStop(OrderTicket(),TrailingStop,TrailingStep,TrailingStopMethod);
+           }
+        }
+      else if(LockProfitAfter==0)
+        {
+         RZ_TrailingStop(OrderTicket(),TrailingStop,TrailingStep,TrailingStopMethod);
+        }
+
+     }
+
+   return false;
+
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void OnTick()
+  {
+   CopyRates(_Symbol,PERIOD_CURRENT,0,5,bar);
+   if(bar[0].time > lastBartime){
+      newBar = true;
+      lastBartime = bar[0].time;
+      }else{
+         newBar = false;
+      }
+      if(newBar == true)
+    //--- Lấy giá trị ADX hiện tại
+         
+           { OrderSend(Symbol(),OP_BUY,LotBuy,Ask,Slippage,SLBuy,TPBuy,NULL,MagicNumber,0,clrAliceBlue)&&  OrderSend(Symbol(),OP_SELL,LotSell,Bid,Slippage,SLSell,TPSell,NULL,MagicNumber,0,clrAliceBlue);
+           
+               }
+           
+            if(Bars<100 || IsTradeAllowed()==false)
+               return;
+         
+            if(CalculateCurrentOrders()!=0)
+               SetSLnTP();
+
+   OrderTest();   
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void OrderTest()
+  {
+   if(!IsTesting()) return;
+   if(CalculateCurrentOrders()!=0) return;
+   if(Volume[0]>1) return;
+   double MA[3];
+
+   MA[0]=iMA(NULL,0,10,0,MODE_EMA,PRICE_CLOSE,0);
+   MA[1]=iMA(NULL,0,20,0,MODE_EMA,PRICE_CLOSE,0);
+   MA[2]=iMA(NULL,0,100,0,MODE_EMA,PRICE_CLOSE,0);
+
+   if((MA[0]<MA[1]) && MA[0]>MA[2])
+      int ticket=OrderSend(NULL,OP_BUY,MarketInfo(Symbol(),MODE_MINLOT),Ask,3,0,0);
+   if((MA[0]>MA[1]) && MA[0]<MA[2])
+      int ticket=OrderSend(NULL,OP_SELL,MarketInfo(Symbol(),MODE_MINLOT),Bid,3,0,0);
+  }
+//+------------------------------------------------------------------+
